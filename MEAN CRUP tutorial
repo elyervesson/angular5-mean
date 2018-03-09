@@ -1,0 +1,799 @@
+# Tutorial de aplicação web (CRUD) utilizando o MEAN stack
+
+-- Para realizar esse tutorial são necessarias as seguintes dependendencias:
+
+* Node.js
+* Angular CLI 1.5
+* Angular 5
+* MongoDB
+* Exrpress.js
+* Mongoose.js
+* IDE ou editor de texto
+
+- Inicialmente é necessario ja ter o node.js e o mongodb instalado.
+
+-- Instalando o angular CLI e criando uma aplicação angular 5
+
+--- Instalando o angular CLI
+
+sudo npm install -g @angular/cli
+
+--- Criando uma aplicação angular5
+
+ng new mean-angular5
+
+--- Dentro da pasta do projeto, rodar a aplicação
+
+ng serve
+
+Este comando deve compilar o projeto e servi-lo no endereço 'http://localhost:4200/'
+
+-- Substituindo o serviço web com o Express.js
+
+--- Adicionando o express e suas dependencias ao package.json
+
+npm install --save express body-parser morgan body-parser serve-favicon
+
+--- Criando a pasta bin e o arquivo www.js e adicionando codigo
+
+mkdir bin
+touch bin/www
+
+-----------------------------------------------------------
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('mean-app:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
+-----------------------------------------------------------
+
+--- Para garantir que o servidor vai rodar apartir de bin/www devemos editar o package.json e alterar o valor de start
+
+"scripts": {
+  "ng": "ng",
+  "start": "ng build && node ./bin/www",
+  "build": "ng build",
+  "test": "ng test",
+  "lint": "ng lint",
+  "e2e": "ng e2e"
+},
+
+--- Criando o app.js e adicionando codigo relacionado a erros 404 e 500
+
+touch app.js
+
+-----------------------------------------------------------
+var express = require('express');
+var path = require('path');
+var favicon = require('serve-favicon');
+var logger = require('morgan');
+var bodyParser = require('body-parser');
+
+var book = require('./routes/book');
+var app = express();
+
+app.use(logger('dev'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({'extended':'false'}));
+app.use(express.static(path.join(__dirname, 'dist')));
+app.use('/books', express.static(path.join(__dirname, 'dist')));
+app.use('/book', book);
+
+// catch 404 and forward to error handler
+app.use(function(req, res, next) {
+  var err = new Error('Not Found');
+  err.status = 404;
+  next(err);
+});
+
+// error handler
+app.use(function(err, req, res, next) {
+  // set locals, only providing error in development
+  res.locals.message = err.message;
+  res.locals.error = req.app.get('env') === 'development' ? err : {};
+
+  // render the error page
+  res.status(err.status || 500);
+  res.render('error');
+});
+
+module.exports = app;
+-----------------------------------------------------------
+
+--- Criando o diretorio routes e rotas para o aquivo book
+
+mkdir routes
+touch routes/book.js
+
+-----------------------------------------------------------
+var express = require('express');
+var router = express.Router();
+
+/* GET home page. */
+router.get('/', function(req, res, next) {
+  res.send('Express RESTful API');
+});
+
+module.exports = router;
+-----------------------------------------------------------
+
+-- Instalando e configurando o mongoose.js
+
+--- Devemos instalar o mongoose para facilitar a cominicação com o banco de dados e o bluebird que é uma biblioteca de promessas
+
+npm install --save mongoose bluebird
+
+--- Adicionando o codigo de conexão no app.js
+
+-----------------------------------------------------------
+var mongoose = require('mongoose');
+mongoose.Promise = require('bluebird');
+mongoose.connect('mongodb://localhost/mean-angular5', { promiseLibrary: require('bluebird') })
+  .then(() =>  console.log('connection succesful'))
+  .catch((err) => console.error(err));
+-----------------------------------------------------------
+
+--- Iniciando o mongoDB
+
+./mongod
+
+--- Deve ser possivel visualizar uma mensagem de "connection succesful" no console indicando que tudo ocorreu bem.
+
+(OBS: se estivessemos utilizando a biblioteca de promessas do mongoose iriamos receber uma mensagem de aviso de 'deprecated', o mongoose indica que os desenvolvedores usem outras bibliotecas no lugar)
+
+-- Criando um modelo mongoose.js
+
+mkdir models
+touch models/Book.js
+
+-----------------------------------------------------------
+var mongoose = require('mongoose');
+
+var BookSchema = new mongoose.Schema({
+  isbn: String,
+  title: String,
+  author: String,
+  description: String,
+  published_year: String,
+  publisher: String,
+  updated_date: { type: Date, default: Date.now },
+});
+
+module.exports = mongoose.model('Book', BookSchema);
+-----------------------------------------------------------
+
+-- Criação de rotas para acessar os dados de books por API rest
+
+--- Copie o trecho de codigo para o arquivo book.js
+
+-----------------------------------------------------------
+var express = require('express');
+var router = express.Router();
+var mongoose = require('mongoose');
+var Book = require('../models/Book.js');
+
+/* GET ALL BOOKS */
+router.get('/', function(req, res, next) {
+  Book.find(function (err, products) {
+    if (err) return next(err);
+    res.json(products);
+  });
+});
+
+/* GET SINGLE BOOK BY ID */
+router.get('/:id', function(req, res, next) {
+  Book.findById(req.params.id, function (err, post) {
+    if (err) return next(err);
+    res.json(post);
+  });
+});
+
+/* SAVE BOOK */
+router.post('/', function(req, res, next) {
+  Book.create(req.body, function (err, post) {
+    if (err) return next(err);
+    res.json(post);
+  });
+});
+
+/* UPDATE BOOK */
+router.put('/:id', function(req, res, next) {
+  Book.findByIdAndUpdate(req.params.id, req.body, function (err, post) {
+    if (err) return next(err);
+    res.json(post);
+  });
+});
+
+/* DELETE BOOK */
+router.delete('/:id', function(req, res, next) {
+  Book.findByIdAndRemove(req.params.id, req.body, function (err, post) {
+    if (err) return next(err);
+    res.json(post);
+  });
+});
+
+module.exports = router;
+-----------------------------------------------------------
+
+--- Testando uma das novas rotas adicionadas
+
+curl -i -H "Accept: application/json" localhost:3000/book
+
+--- Adicionando alguns livros atraves da rota de post adicionada
+
+curl -i -X POST -H "Content-Type: application/json" -d '{ "isbn":"123442123, 97885654453443","title":"Learn how to build modern web application with MEAN stack","author": "Didin J.","description":"The comprehensive step by step tutorial on how to build MEAN (MongoDB, Express.js, Angular 5 and Node.js) stack web application from scratch","published_year":"2017","publisher":"Djamware.com" }' localhost:3000/book	
+
+-- Criando um componente em angular 5 para exibir a lista de livros
+
+--- Criando um novo componente
+
+ng g component book
+
+--- Apos isso, sera gerado todo o necessario para fazer o build do componente book
+
+--- Devemos adicionar alguns imports ao arquivo 'src/app/app.module.ts'
+
+-----------------------------------------------------------
+import { FormsModule } from '@angular/forms';
+import { HttpClientModule } from '@angular/common/http';
+-----------------------------------------------------------
+
+-----------------------------------------------------------
+imports: [
+  BrowserModule, <- ESSE JA EXISTIA
+  FormsModule, <- ESSE FOI ADICIONADO
+  HttpClientModule <- ESSE FOI ADICIONADO
+],
+-----------------------------------------------------------
+
+--- Fazendo uma requisição rest usando o modelo angular 'httpClient', para isso devemos abrir o arquivo 'src/app/book/book.components.ts' e altera-lo.
+
+--- Adicionando o import do httpClient
+
+-----------------------------------------------------------
+import { HttpClient } from '@angular/common/http';
+-----------------------------------------------------------
+
+--- Injetar o httpClient no construtor do componente.
+
+-----------------------------------------------------------
+constructor(private http: HttpClient) { }
+-----------------------------------------------------------
+
+--- Adicionando uma variavel array para armazenar os dados de livros antes do contrutor
+
+-----------------------------------------------------------
+books: any;
+-----------------------------------------------------------
+
+--- Adicionando o codigo para pegar a lista de dados dos livros da APIrest
+
+-----------------------------------------------------------
+ngOnInit() {
+  this.http.get('/book').subscribe(data => {
+    this.books = data;
+  });
+}
+-----------------------------------------------------------
+
+--- Agora é possivel exibir a lista de livros na pagina, devemos abrir o arquivo 'src/app/book/book.component.html' e altera-lo
+
+-----------------------------------------------------------
+<div class="container">
+  <h1>Book List</h1>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Author</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let book of books">
+        <td>{{ book.title }}</td>
+        <td>{{ book.author }}</td>
+        <td>Show Detail</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+-----------------------------------------------------------
+
+--- Adicionando a biblioteca css do boostrap ao projeto, pois a pagina recentemente adicionada utiliza estilos do bootstrap
+
+--- Devemos abrir o arquivo 'src/index.html' e edita-lo
+
+-----------------------------------------------------------
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MeanAngular5</title>
+  <base href="/">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- Latest compiled and minified CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <!-- Optional theme -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+</head>
+<body>
+  <app-root></app-root>
+  <!-- Latest compiled and minified JavaScript -->
+  <script src="//code.jquery.com/jquery-1.12.0.min.js"></script>
+  <script src="//code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+</body>
+</html>
+-----------------------------------------------------------
+
+-- Criando rotas do angular 5 para o componente book
+
+
+--- Para utilizar o componente book com pagina default, devemos abrir e editar 'src/app/app.module.ts'.
+
+--- Devemos adicionar o importe de Routing
+
+-----------------------------------------------------------
+import { RouterModule, Routes } from '@angular/router';
+-----------------------------------------------------------
+
+--- Criando uma constante router para rotear para o componente book
+
+-----------------------------------------------------------
+const appRoutes: Routes = [
+  {
+    path: 'books',
+    component: BookComponent,
+    data: { title: 'Book List' }
+  },
+  { path: '',
+    redirectTo: '/books',
+    pathMatch: 'full'
+  }
+];
+-----------------------------------------------------------
+
+--- A sessão imports do @NgModule deve ficar da seguinte forma:
+
+-----------------------------------------------------------
+imports: [
+  BrowserModule,
+  HttpClientModule,
+  RouterModule.forRoot(
+    appRoutes,
+    { enableTracing: true } // <-- debugging purposes only
+  )
+],
+-----------------------------------------------------------
+
+--- Ativando a rota criada, devemos editar o arquivo 'src/app/app.component.html', substituindo tudo por isso:
+
+-----------------------------------------------------------
+<router-outlet></router-outlet>
+-----------------------------------------------------------
+
+--- Podemos acessar o http://localhost:3000/books e http://localhost:3000/ para visualizar as informações dos livros cadastrados no banco de dados
+
+npm start
+
+-- Criar o componente para exibir os detalhes de um livro
+
+--- Criar um novo componente
+
+ng g component book-detail
+
+--- Adicionar a rota a variavel de rotas em 'src/app/app.module.ts'
+
+-----------------------------------------------------------
+const appRoutes: Routes = [
+  {
+    path: 'books',
+    component: BookComponent,
+    data: { title: 'Book List' }
+  },
+  {
+    path: 'book-details/:id',
+    component: BookDetailComponent,
+    data: { title: 'Book Details' }
+  },
+  { path: '',
+    redirectTo: '/books',
+    pathMatch: 'full'
+  }
+];
+-----------------------------------------------------------
+
+-- Adicionar 'book-details' no link em 'src/app/book/book.component.html' nas ultimas linhas
+
+-----------------------------------------------------------
+<tr *ngFor="let book of books">
+	<td>{{ book.title }}</td>
+	<td>{{ book.author }}</td>
+	<td><a [routerLink]="['/book-details', book._id]">Show Detail</a></td>
+</tr>
+-----------------------------------------------------------
+
+--- Editando o 'src/app/book-detail/book-detail.component.ts' e substituindo o codigo.
+
+-----------------------------------------------------------
+import { Component, OnInit, ViewEncapsulation } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
+
+@Component({
+  selector: 'app-book-detail',
+  templateUrl: './book-detail.component.html',
+  styleUrls: ['./book-detail.component.css'],
+  encapsulation: ViewEncapsulation.None
+})
+export class BookDetailComponent implements OnInit {
+
+  book = {};
+
+  constructor(private route: ActivatedRoute, private http: HttpClient) { }
+
+  ngOnInit() {
+    this.getBookDetail(this.route.snapshot.params['id']);
+  }
+
+  getBookDetail(id) {
+    this.http.get('/book/'+id).subscribe(data => {
+      this.book = data;
+    });
+  }
+
+}
+-----------------------------------------------------------
+
+--- Editando o 'src/app/book-detail/book-detail.component.html' e substituindo o codigo.
+
+-----------------------------------------------------------
+<div class="container">
+  <h1>{{ book.title }}</h1>
+  <dl class="list">
+    <dt>ISBN</dt>
+    <dd>{{ book.isbn }}</dd>
+    <dt>Author</dt>
+    <dd>{{ book.author }}</dd>
+    <dt>Publisher</dt>
+    <dd>{{ book.publisher }}</dd>
+    <dt>Price</dt>
+    <dd>{{ book.price }}</dd>
+    <dt>Update Date</dt>
+    <dd>{{ book.updated_at }}</dd>
+  </dl>
+</div>
+-----------------------------------------------------------
+
+-- Criar o componente para adicionar um novo livro
+
+--- Criar um novo componente
+
+ng g component book-create
+
+--- Adicionar a rota a variavel de rotas em 'src/app/app.module.ts'
+
+-----------------------------------------------------------
+  {
+    path: 'book-create',
+    component: BookCreateComponent,
+    data: { title: 'Create Book' }
+  },
+-----------------------------------------------------------
+
+-- Adicionar 'book-create' no link em 'src/app/book/book.component.html'
+
+-----------------------------------------------------------
+<h1>Book List
+  <a [routerLink]="['/book-create']" class="btn btn-default btn-lg">
+    <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+  </a>
+</h1>
+-----------------------------------------------------------
+
+--- Alterar o codigo de 'src/app/book/book-create.component.ts' com o seguinte:
+
+-----------------------------------------------------------
+import { Component, OnInit, ViewEncapsulation } from '@angular/core';
+import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
+
+@Component({
+  selector: 'app-book-create',
+  templateUrl: './book-create.component.html',
+  styleUrls: ['./book-create.component.css'],
+  encapsulation: ViewEncapsulation.None
+})
+export class BookCreateComponent implements OnInit {
+
+  book = {};
+
+  constructor(private http: HttpClient, private router: Router) { }
+
+  ngOnInit() {
+  }
+
+  saveBook() {
+    this.http.post('/book', this.book)
+      .subscribe(res => {
+          let id = res['_id'];
+          this.router.navigate(['/book-details', id]);
+        }, (err) => {
+          console.log(err);
+        }
+      );
+  }
+
+}
+-----------------------------------------------------------
+
+--- Altere o codigo de 'src/app/book-create/book-create.component.html' com o seguinte:
+
+-----------------------------------------------------------
+<div class="container">
+  <h1>Add New Book</h1>
+  <div class="row">
+    <div class="col-md-6">
+      <form (ngSubmit)="saveBook()" #bookForm="ngForm">
+        <div class="form-group">
+          <label for="name">ISBN</label>
+          <input type="text" class="form-control" [(ngModel)]="book.isbn" name="isbn" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Title</label>
+          <input type="text" class="form-control" [(ngModel)]="book.title" name="title" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Author</label>
+          <input type="text" class="form-control" [(ngModel)]="book.author" name="author" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Published Year</label>
+          <input type="number" class="form-control" [(ngModel)]="book.published_year" name="published_year" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Publisher</label>
+          <input type="text" class="form-control" [(ngModel)]="book.publisher" name="publisher" required>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="btn btn-success" [disabled]="!bookForm.form.valid">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+-----------------------------------------------------------
+
+-- Criar o componente para editar um novo livro
+
+--- Criar um novo componente
+
+ng g component book-edit
+
+--- Adicionar a rota a variavel de rotas em 'src/app/app.module.ts'
+
+-----------------------------------------------------------
+  {
+    path: 'book-edit/:id',
+    component: BookEditComponent,
+    data: { title: 'Edit Book' }
+  },
+-----------------------------------------------------------
+
+-- Adicionar 'book-edit' no link em 'src/app/book-details/book-details.component.html' na ultima linha
+
+-----------------------------------------------------------
+<div class="row">
+  <div class="col-md-12">
+    <a [routerLink]="['/book-edit', book._id]" class="btn btn-success">EDIT</a>
+  </div>
+</div>
+-----------------------------------------------------------
+
+--- Altere o codigo de 'src/app/book-edit/book-edit.component.ts' com o seguinte:
+
+-----------------------------------------------------------
+import { Component, OnInit, ViewEncapsulation } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
+
+@Component({
+  selector: 'app-book-edit',
+  templateUrl: './book-edit.component.html',
+  styleUrls: ['./book-edit.component.css'],
+  encapsulation: ViewEncapsulation.None
+})
+export class BookEditComponent implements OnInit {
+
+  book = {};
+
+  constructor(private http: HttpClient, private router: Router, private route: ActivatedRoute) { }
+
+  ngOnInit() {
+    this.getBook(this.route.snapshot.params['id']);
+  }
+
+  getBook(id) {
+    this.http.get('/book/'+id).subscribe(data => {
+      this.book = data;
+    });
+  }
+
+  updateBook(id, data) {
+    this.http.put('/book/'+id, data)
+      .subscribe(res => {
+          let id = res['_id'];
+          this.router.navigate(['/book-details', id]);
+        }, (err) => {
+          console.log(err);
+        }
+      );
+  }
+
+}
+
+-----------------------------------------------------------
+
+--- Altere o codigo de 'src/app/book-edit/book-edit.component.html' com o seguinte:
+
+-----------------------------------------------------------
+<div class="container">
+  <h1>Edit Book</h1>
+  <div class="row">
+    <div class="col-md-6">
+      <form (ngSubmit)="updateBook(book._id)" #bookForm="ngForm">
+        <div class="form-group">
+          <label for="name">ISBN</label>
+          <input type="text" class="form-control" [(ngModel)]="book.isbn" name="isbn" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Title</label>
+          <input type="text" class="form-control" [(ngModel)]="book.title" name="title" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Author</label>
+          <input type="text" class="form-control" [(ngModel)]="book.author" name="author" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Published Year</label>
+          <input type="number" class="form-control" [(ngModel)]="book.published_year" name="published_year" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Publisher</label>
+          <input type="text" class="form-control" [(ngModel)]="book.publisher" name="publisher" required>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="btn btn-success" [disabled]="!bookForm.form.valid">Update</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+-----------------------------------------------------------
+
+-- Criar o componente para deletar um livro
+
+--- Edite o codigo de 'src/app/book-detail/book-detail.component.ts' para adicionar 'router nos modulos de @angular/router
+
+-----------------------------------------------------------
+import { ActivatedRoute, Router } from '@angular/router';
+-----------------------------------------------------------
+
+--- Adicione tambem 'Router' nos parametros do construtor
+
+-----------------------------------------------------------
+constructor(private router: Router, private route: ActivatedRoute, private http: HttpClient) { }
+-----------------------------------------------------------
+
+--- Por fim, adicione a função que deleta o usuario abaixo do 'get'
+
+-----------------------------------------------------------
+deleteBook(id) {
+  this.http.delete('/book/'+id)
+    .subscribe(res => {
+        this.router.navigate(['/books']);
+      }, (err) => {
+        console.log(err);
+      }
+    );
+}
+-----------------------------------------------------------
+
+--- Adicione o botão de deletar no codigo 'src/app/book-detail/book-detail.component.html'
+
+-----------------------------------------------------------
+<div class="row">
+  <div class="col-md-12">
+    <a [routerLink]="['/book-edit', book._id]" class="btn btn-success">EDIT</a>
+    <button class="btn btn-danger" type="button" (click)="deleteBook(book._id)">DELETE</button>
+  </div>
+</div>
+-----------------------------------------------------------
